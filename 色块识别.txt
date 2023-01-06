@@ -1,0 +1,64 @@
+#识别红色，蓝色色块，并标出了红色色块，和蓝色色块的中心坐标
+import cv2
+import numpy as np
+
+# 读取图像
+img_origion = cv2.imread(r"C:\Users\15213\Desktop\color.jpg")
+img=cv2.medianBlur(img_origion,3)
+hsv = cv2.cvtColor(img,cv2.COLOR_BGR2HSV)
+
+#在hsv中红色有两个阈值
+lower_red1 = np.array([0,43,46])
+upper_red1 = np.array([6,255,255])
+lower_red2 = np.array([156,43,46])
+upper_red2 = np.array([180,255,255])
+#蓝色的阈值
+lower_blue = np.array([100,43,46])
+upper_blue = np.array([111,255,255])
+
+mask1 = cv2.inRange(hsv,lower_red1,upper_red1)
+mask2 = cv2.inRange(hsv,lower_red2,upper_red2)
+mask3 = cv2.inRange(hsv, lower_blue, upper_blue)
+mask3 = cv2.medianBlur(mask3, 5)
+red = cv2.add(mask1,mask2)
+red=cv2.medianBlur(red,7)
+
+cnts = cv2.findContours(red.copy(),cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_SIMPLE)[-2]
+center = None
+if len(cnts) > 0 :
+    C = max(cnts,key = cv2.contourArea)
+    c = min(cnts, key=cv2.contourArea)
+    ((center_x1,center_y1),radius1) = cv2.minEnclosingCircle(C)
+    ((center_x2, center_y2), radius2) = cv2.minEnclosingCircle(c)
+    M = cv2.moments(c)
+    cv2.circle(red,(int(center_x1),int(center_y1)),int(radius1),(0,255,255),2)
+    cv2.circle(red,center,5,(0,0,255),-1)
+
+    print('红色色块1的中心坐标',(int(center_x1),int(center_y1)))
+    print('红色色块2的中心坐标',(int(center_x2),int(center_y2)))
+
+#蓝色的中心坐标查找与红色基本一致，在文中不再赘述
+
+#以下是标注各个点的过程
+point_size = 1
+point_color = ( 0, 255, 0)  # BGR
+thickness = 4
+points_list = [(65, 134), (339,136), (212,66), (207,135), (486,67), (481,136)]
+for point in points_list:
+	cv2.circle(img_origion, point, point_size, point_color, thickness)
+
+
+cv2.putText(img_origion,'(65,134)',(65,134),cv2.FONT_ITALIC,0.5,[255,0,0])
+cv2.putText(img_origion,'(339,136)',(339,136),cv2.FONT_ITALIC,0.5,[255,0,0])
+cv2.putText(img_origion,'(212,66)',(212,66),cv2.FONT_ITALIC,0.5,[0,0,255])
+cv2.putText(img_origion,'(207,135)',(207,135),cv2.FONT_ITALIC,0.5,[0,0,255])
+cv2.putText(img_origion,'(486,67)',(426,67),cv2.FONT_ITALIC,0.5,[0,0,255])
+cv2.putText(img_origion,'(481,136)',(421,136),cv2.FONT_ITALIC,0.5,[0,0,255])
+
+cv2.imshow("img",img_origion)
+cv2.imshow("hsv-red",red)
+cv2.imshow("hsv-blue",mask3)
+
+
+cv2.waitKey(0)
+cv2.destroyAllWindows()
