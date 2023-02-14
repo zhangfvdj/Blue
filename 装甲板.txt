@@ -1,0 +1,122 @@
+import numpy as np
+import cv2
+
+def  morphologyEx(image,kernel,times):  #闭运算 输入参数 ：图片 核 迭代次数
+    sqKernel = cv2.getStructuringElement(cv2.MORPH_RECT, (kernel, kernel))
+    mask = cv2.morphologyEx(image, cv2.MORPH_CLOSE, sqKernel, iterations=times)
+    return mask
+def Contrast_and_Brightness(alpha, beta, img):
+    blank = np.zeros(img.shape, img.dtype)
+    # dst = alpha * img + (1-alpha) * blank + beta
+    dst = cv2.addWeighted(img, alpha, blank, 1 - alpha, beta)
+    return dst
+
+cap = cv2.VideoCapture(r"C:\Users\15213\Desktop\red.mp4")
+
+while (cap.isOpened()):
+    kernel = np.ones((4, 4), np.uint8)
+    ret, frame = cap.read()  ##ret返回布尔量q
+    #frame = cv2.medianBlur(frame, 3)#这个函数帧率太低
+    try:
+
+        frame = cv2.resize(frame, (640, 480),interpolation = cv2.INTER_AREA)
+    except:
+        break
+
+    frame1 = Contrast_and_Brightness(2, -100, frame)
+    # 对比度，亮度
+    frame = Contrast_and_Brightness(2, 50, frame)
+    gray = cv2.cvtColor(frame1, cv2.COLOR_BGR2GRAY)
+    ret, thresh = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY)
+
+    # 通道分离，红色装甲板r-b,蓝色b-r
+    B, G, R = cv2.split(frame1)
+    BR = B-R
+    RB = R-B
+    BR = cv2.GaussianBlur(RB, (5, 5), 0)
+    draw_img = RB.copy()
+    ret2, thresh2 = cv2.threshold(draw_img, 110, 255, cv2.THRESH_BINARY)
+    dilate = cv2.dilate(thresh2, kernel, 1)
+
+
+    img_and = cv2.bitwise_and(thresh, dilate)
+    dilate2 = cv2.dilate(img_and, kernel, 1)
+    mask = morphologyEx(dilate2, 5, 2)
+    #cv2.imshow('mask',mask)
+
+    whole_h, whole_w = frame.shape[:2]
+    #img.shape[:2]取彩色图片的长和宽
+
+    contours, hier = cv2.findContours(mask, cv2.RETR_TREE,cv2.CHAIN_APPROX_NONE)
+
+
+
+
+    contours = list(contours)
+    contours.sort(key=lambda c: cv2.contourArea(c), reverse=True)
+    width_array = []
+    height_array = []
+    point_array = []
+
+    for c in range(len(contours)):
+        rect = cv2.minAreaRect(contours[c])
+        box = cv2.boxPoints(rect)  # 返回矩形四个角点坐标
+        box = np.int0(box)  # 获得矩形角点坐标(整数)
+        #cv2.drawContours(frame, [box], -1, (0, 255, 255), 2)
+
+
+
+
+#5可能代表了前五个
+    for cont in contours[:5]:
+        x, y, w, h = cv2.boundingRect(cont)
+        #Light_Rec = cv2.fitEllipse(cont)
+
+        try:
+            if h / w >= 1.7:
+
+                    width_array.append(w)
+                    height_array.append(h)
+                    point_array.append([x, y])
+        except:
+            continue
+        point_near = [0, 0]
+        min = 100
+        for i in range(len(width_array) - 1):
+            for j in range(i + 1, len(width_array)):
+                value = abs(width_array[i] * height_array[i] - width_array[j] * height_array[j])
+                if value < min:
+                    min = value
+                    point_near[0] = i
+                    point_near[1] = j
+        try:
+            rectangle1 = point_array[point_near[0]]
+            rectangle2 = point_array[point_near[1]]
+            point1 = [rectangle1[0] + width_array[point_near[0]] / 2, rectangle1[1]]
+            point2 = [rectangle1[0] + width_array[point_near[0]] / 2, rectangle1[1] + height_array[point_near[0]]]
+            point3 = [rectangle2[0] + width_array[point_near[1]] / 2, rectangle2[1]]
+            point4 = [rectangle2[0] + width_array[point_near[1]] / 2, rectangle2[1] + height_array[point_near[1]]]
+
+            #print(point1, point2, point3, point4)
+            dis = pow(pow((point1[0]-point3[0]),2)+pow((point1[1]-point3[1]),2),0.5)
+            high = pow(pow((point1[0]-point2[0]),2)+pow((point1[1]-point2[1]),2),0.5)
+            #print(dis)
+            if dis /high < 2.3 and dis/high >1.8 :
+                #print(dis/high)
+                x = np.array([point1, point2, point4, point3], np.int32)
+                box = x.reshape((-1, 1, 2)).astype(np.int32)
+                cv2.polylines(frame, [box], True, (255,0,255), 2)
+        except:
+            continue
+
+
+
+    #cv2.imshow('b-r',BR)
+    #cv2.imshow("dilate2", dilate2)
+
+    cv2.imshow('frame',frame)
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+
+cap.release()
+cv2.destroyAllWindows()
